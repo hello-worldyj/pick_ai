@@ -1,123 +1,76 @@
 export default {
   async fetch(request, env) {
-    // ✅ CORS + Preflight (3번)
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type"
-        }
-      });
-    }
-
     if (request.method !== "POST") {
-      return new Response("OK", {
-        headers: { "Access-Control-Allow-Origin": "*" }
-      });
+      return new Response("Not allowed", { status: 405 });
     }
 
     try {
-      const body = await request.json();
-      const question = body.question;
+      const { question, mode } = await request.json();
 
-      if (!question) {
+      if (!question || question.trim().length < 3) {
         return new Response(
-          JSON.stringify({ error: "No question provided" }),
-          {
-            status: 400,
-            headers: { "Access-Control-Allow-Origin": "*" }
-          }
+          JSON.stringify({ final: "No valid question provided." }),
+          { headers: { "Content-Type": "application/json" } }
         );
       }
 
-      const answers = [];
+      const systemPrompt =
+        mode === "explain"
+          ? "You are a precise tutor. Explain briefly and give the final answer."
+          : "You are a precise solver. Give ONLY the final answer. No explanation.";
 
-      for (let i = 0; i < 3; i++) {
-        const res = await fetch(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "Return ONLY the final answer. No explanation."
-                },
-                {
-                  role: "user",
-                  content: question
-                }
-              ],
-              temperature: 0
-            })
-          }
+      const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: question }
+          ],
+          temperature: 0
+        })
+      });
+
+      if (!openaiRes.ok) {
+        const errText = await openaiRes.text();
+        return new Response(
+          JSON.stringify({
+            final: "AI server error",
+            detail: errText
+          }),
+          { headers: { "Content-Type": "application/json" } }
         );
-
-        // ✅ OpenAI 응답 안전 처리 (2번)
-        if (!res.ok) {
-          const errText = await res.text();
-          return new Response(
-            JSON.stringify({
-              error: "OpenAI request failed",
-              status: res.status,
-              detail: errText
-            }),
-            {
-              status: 500,
-              headers: { "Access-Control-Allow-Origin": "*" }
-            }
-          );
-        }
-
-        const data = await res.json();
-        const answer =
-          data?.choices?.[0]?.message?.content?.trim();
-
-        if (answer) answers.push(answer);
       }
 
-      // Pick AI 로직
-      const count = {};
-      for (const a of answers) {
-        count[a] = (count[a] || 0) + 1;
-      }
+      const aiData = await openaiRes.json();
+      const aiText = aiData.choices?.[0]?.message?.content?.trim();
 
-      let final = answers[answers.length - 1];
-      for (const k in count) {
-        if (count[k] >= 2) final = k;
+      if (!aiText) {
+        return new Response(
+          JSON.stringify({ final: "No answer generated." }),
+          { headers: { "Content-Type": "application/json" } }
+        );
       }
 
       return new Response(
         JSON.stringify({
-          final,
-          tries: answers.length,
-          mode: "pick"
+          final: aiText,
+          mode
         }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-          }
-        }
+        { headers: { "Content-Type": "application/json" } }
       );
 
     } catch (e) {
       return new Response(
         JSON.stringify({
-          error: "Worker crashed",
-          message: e.message
+          final: "Worker crashed",
+          error: e.message
         }),
-        {
-          status: 500,
-          headers: { "Access-Control-Allow-Origin": "*" }
-        }
+        { headers: { "Content-Type": "application/json" } }
       );
     }
   }
