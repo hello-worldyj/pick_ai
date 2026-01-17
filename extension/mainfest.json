@@ -1,8 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Pick AI",
-  "version": "1.0",
-  "permissions": ["activeTab"],
+  "version": "0.1.0",
+  "description": "Double click anywhere to get verified AI answers",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
   "action": {
     "default_popup": "popup.html"
   },
