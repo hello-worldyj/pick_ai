@@ -1,6 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pick AI",
+  "description": "Select text or press shortcut to get verified AI answers",
   "version": "0.1.0",
 
   "action": {
@@ -12,9 +13,27 @@
     "open_in_tab": true
   },
 
+  "background": {
+    "service_worker": "background.js"
+  },
+
   "permissions": [
     "storage",
     "activeTab",
     "scripting"
-  ]
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "commands": {
+    "run-pick-ai": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+5",
+        "mac": "Command+Option+5"
+      },
+      "description": "Run Pick AI"
+    }
+  }
 }
