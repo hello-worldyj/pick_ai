@@ -1,49 +1,50 @@
-let popup;
+let popup = null;
+let lastText = "";
 
-document.addEventListener("dblclick", (e) => {
-  const text = window.getSelection().toString().trim();
-  if (!text) return;
+document.addEventListener("selectionchange", () => {
+  const text = window.getSelection()?.toString().trim();
+  if (text) lastText = text;
+});
+
+document.addEventListener("mouseup", (e) => {
+  if (!lastText) return;
 
   removePopup();
 
   popup = document.createElement("div");
   popup.style.position = "fixed";
-  popup.style.top = e.clientY + "px";
-  popup.style.left = e.clientX + "px";
+  popup.style.top = `${e.clientY + 8}px`;
+  popup.style.left = `${e.clientX + 8}px`;
   popup.style.zIndex = 999999;
   popup.style.background = "#111";
   popup.style.color = "#fff";
-  popup.style.padding = "8px";
-  popup.style.borderRadius = "8px";
+  popup.style.padding = "6px 8px";
+  popup.style.borderRadius = "6px";
   popup.style.fontSize = "12px";
-  popup.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+  popup.style.boxShadow = "0 4px 12px rgba(0,0,0,.3)";
+  popup.style.cursor = "pointer";
 
-  popup.innerHTML = `
-    <div style="margin-bottom:6px;">Pick AI</div>
-    <button id="pick-ai-btn" style="width:100%;cursor:pointer;">anser only</button>
-  `;
+  popup.textContent = "Pick AI";
+
+  popup.onclick = () => askAI(lastText);
 
   document.body.appendChild(popup);
-
-  document.getElementById("pick-ai-btn").onclick = () => {
-    askAI(text);
-  };
 });
 
 function askAI(question) {
-  popup.innerHTML = "thinking...";
+  popup.textContent = "Thinking...";
 
   fetch("https://pickai.sis00011086.workers.dev/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, mode: "pick" })
   })
-    .then((r) => r.json())
-    .then((data) => {
-      popup.innerHTML = `<strong>answer:</strong> ${data.final}`;
+    .then(r => r.json())
+    .then(data => {
+      popup.textContent = `✔ ${data.final}`;
     })
     .catch(() => {
-      popup.innerHTML = "error";
+      popup.textContent = "Error";
     });
 }
 
@@ -52,7 +53,4 @@ function removePopup() {
   popup = null;
 }
 
-// 다른 곳 클릭하면 닫힘
-document.addEventListener("click", () => {
-  removePopup();
-});
+document.addEventListener("mousedown", removePopup);
