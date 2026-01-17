@@ -1,6 +1,6 @@
-name = "pick-ai-worker"
-main = "src/index.js"
+name = "pickai"
+main = "index.js"
 compatibility_date = "2024-12-01"
 
 [vars]
-OPEN_AI_KEY = ""
+# 대시보드에서 OPEN_AI_KEY 등록
