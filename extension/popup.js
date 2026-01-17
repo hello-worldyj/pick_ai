@@ -1,27 +1,26 @@
-document.getElementById("pick").onclick = async () => {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true
-  });
+document.getElementById("solve").onclick = async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  const selection = await chrome.tabs.sendMessage(
-    tab.id,
-    { type: "GET_SELECTION" }
-  );
-
-  const res = await fetch(
-    "https://YOUR_WORKER_URL", // ✍️ 여기에 Workers URL
+  chrome.scripting.executeScript(
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question: selection.text
-      })
+      target: { tabId: tab.id },
+      func: () => window.getSelection().toString()
+    },
+    async (res) => {
+      const text = res[0].result;
+      if (!text) {
+        document.getElementById("result").innerText = "선택된 문제가 없음";
+        return;
+      }
+
+      const r = await fetch("https://pickai.sis00011086.workers.dev", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: text })
+      });
+
+      const data = await r.json();
+      document.getElementById("result").innerText = data.final || "에러";
     }
   );
-
-  const data = await res.json();
-
-  document.getElementById("result").textContent =
-    `Final: ${data.final}`;
 };
