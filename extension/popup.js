@@ -3,9 +3,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const questionBox = document.getElementById("question");
   const resultBox = document.getElementById("result");
+  const pickBtn = document.getElementById("pick");
+  const explainBtn = document.getElementById("explain");
 
-  document.getElementById("pick").onclick = () => send("pick");
-  document.getElementById("explain").onclick = () => send("explain");
+  if (!pickBtn || !explainBtn) {
+    console.error("Buttons not found");
+    return;
+  }
+
+  pickBtn.onclick = () => send("pick");
+  explainBtn.onclick = () => send("explain");
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
@@ -27,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function send(mode) {
     const question = questionBox.value.trim();
     if (!question) {
-      resultBox.textContent = "No question selected.";
+      resultBox.textContent = "Select a question first.";
       return;
     }
 
@@ -41,9 +48,12 @@ document.addEventListener("DOMContentLoaded", () => {
       .then((r) => r.json())
       .then((data) => {
         resultBox.textContent =
-          mode === "pick" ? `Answer: ${data.final}` : data.explanation;
+          mode === "pick"
+            ? `Answer: ${data.final}`
+            : data.explanation || data.final;
       })
-      .catch(() => {
+      .catch((e) => {
+        console.error(e);
         resultBox.textContent = "Error";
       });
   }
