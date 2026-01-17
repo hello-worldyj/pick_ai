@@ -1,44 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Pick AI</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      width: 260px;
-      padding: 12px;
-    }
-    button {
-      width: 100%;
-      margin-top: 6px;
-      padding: 8px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    textarea {
-      width: 100%;
-      height: 60px;
-      margin-top: 6px;
-      resize: none;
-    }
-    #result {
-      margin-top: 8px;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <h3>Pick AI</h3>
+document.addEventListener("DOMContentLoaded", () => {
+  const workerUrl = "https://pickai.sis00011086.workers.dev/";
 
-  <!-- 👇 id 중요 -->
-  <button id="pick">Answer only</button>
-  <button id="explain">Explain</button>
+  const questionBox = document.getElementById("question");
+  const resultBox = document.getElementById("result");
 
-  <textarea id="question" placeholder="Selected question will appear here"></textarea>
+  document.getElementById("pick").onclick = () => send("pick");
+  document.getElementById("explain").onclick = () => send("explain");
 
-  <div id="result"></div>
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (!tab || tab.url.startsWith("chrome://")) return;
 
-  <script src="popup.js"></script>
-</body>
-</html>
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tab.id },
+        func: () => window.getSelection().toString()
+      },
+      (res) => {
+        if (res && res[0] && res[0].result) {
+          questionBox.value = res[0].result;
+        }
+      }
+    );
+  });
+
+  function send(mode) {
+    const question = questionBox.value.trim();
+    if (!question) {
+      resultBox.textContent = "No question selected.";
+      return;
+    }
+
+    resultBox.textContent = "Thinking...";
+
+    fetch(workerUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, mode })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        resultBox.textContent =
+          mode === "pick" ? `Answer: ${data.final}` : data.explanation;
+      })
+      .catch(() => {
+        resultBox.textContent = "Error";
+      });
+  }
+});
