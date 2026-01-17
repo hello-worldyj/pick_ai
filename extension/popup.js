@@ -1,57 +1,44 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const workerUrl = "https://pickai.sis00011086.workers.dev/";
-
-  const questionBox = document.getElementById("question");
-  const resultBox = document.getElementById("result");
-  const pickBtn = document.getElementById("pick");
-  const explainBtn = document.getElementById("explain");
-
-  pickBtn.onclick = () => send("pick");
-  explainBtn.onclick = () => send("explain");
-
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    if (!tab || tab.url.startsWith("chrome://")) {
-      questionBox.value = "";
-      resultBox.textContent = "이 페이지에서는 사용 불가";
-      return;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pick AI</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      width: 260px;
+      padding: 12px;
     }
-
-    chrome.scripting.executeScript(
-      {
-        target: { tabId: tab.id },
-        func: () => window.getSelection().toString()
-      },
-      (res) => {
-        if (!res || !res[0] || !res[0].result) return;
-        questionBox.value = res[0].result;
-      }
-    );
-  });
-
-  function send(mode) {
-    const question = questionBox.value.trim();
-    if (!question) {
-      resultBox.textContent = "문제를 선택하세요.";
-      return;
+    button {
+      width: 100%;
+      margin-top: 6px;
+      padding: 8px;
+      font-size: 14px;
+      cursor: pointer;
     }
+    textarea {
+      width: 100%;
+      height: 60px;
+      margin-top: 6px;
+      resize: none;
+    }
+    #result {
+      margin-top: 8px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h3>Pick AI</h3>
 
-    resultBox.textContent = "생각 중...";
+  <!-- 👇 id 중요 -->
+  <button id="pick">Answer only</button>
+  <button id="explain">Explain</button>
 
-    fetch(workerUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, mode })
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        resultBox.textContent =
-          mode === "pick"
-            ? `정답: ${data.final}`
-            : data.explanation || data.final;
-      })
-      .catch(() => {
-        resultBox.textContent = "에러 발생";
-      });
-  }
-});
+  <textarea id="question" placeholder="Selected question will appear here"></textarea>
+
+  <div id="result"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
