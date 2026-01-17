@@ -2,35 +2,17 @@
   "manifest_version": 3,
   "name": "Pick AI",
   "version": "0.1.0",
-  "description": "Select text or solve questions instantly",
-
-  "action": {
-    "default_popup": "popup.html"
-  },
-
-  "options_page": "options.html",
-
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting"
-  ],
-
-  "host_permissions": [
-    "<all_urls>"
-  ],
-
-  "background": {
-    "service_worker": "background.js"
-  },
-
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "action": { "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" },
   "commands": {
-    "solve-screen": {
+    "solve": {
       "suggested_key": {
         "mac": "Command+Shift+Z",
         "default": "Ctrl+Shift+Z"
       },
-      "description": "Solve visible question"
+      "description": "Solve question"
     }
   }
 }
