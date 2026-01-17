@@ -1,0 +1,8 @@
+{
+  "extName": { "message": "Pick AI" },
+  "extDesc": { "message": "텍스트를 선택하면 AI가 정답을 제공합니다" },
+  "answerOnly": { "message": "정답만" },
+  "explain": { "message": "설명 포함" },
+  "settingsTitle": { "message": "Pick AI 설정" },
+  "save": { "message": "저장" }
+}
