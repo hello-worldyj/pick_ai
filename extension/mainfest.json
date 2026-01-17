@@ -1,21 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Pick AI",
-  "description": "Select text or press shortcut to get verified AI answers",
   "version": "0.1.0",
+  "description": "Select text or solve questions instantly",
 
   "action": {
     "default_popup": "popup.html"
   },
 
-  "options_ui": {
-    "page": "options.html",
-    "open_in_tab": true
-  },
-
-  "background": {
-    "service_worker": "background.js"
-  },
+  "options_page": "options.html",
 
   "permissions": [
     "storage",
@@ -27,13 +20,17 @@
     "<all_urls>"
   ],
 
+  "background": {
+    "service_worker": "background.js"
+  },
+
   "commands": {
-    "run-pick-ai": {
+    "solve-screen": {
       "suggested_key": {
-        "default": "Ctrl+Alt+5",
-        "mac": "Command+Option+5"
+        "mac": "Command+Shift+Z",
+        "default": "Ctrl+Shift+Z"
       },
-      "description": "Run Pick AI"
+      "description": "Solve visible question"
     }
   }
 }
