@@ -1,15 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Pick AI",
-  "version": "1.0",
-  "permissions": ["activeTab"],
+  "version": "0.1",
+  "description": "Select a question and get only the final answer.",
+  "permissions": ["activeTab", "scripting"],
   "action": {
     "default_popup": "popup.html"
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ]
+  }
 }
