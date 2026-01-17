@@ -9,17 +9,22 @@ document.addEventListener("DOMContentLoaded", () => {
   pickBtn.onclick = () => send("pick");
   explainBtn.onclick = () => send("explain");
 
-  // 선택한 텍스트 가져오기
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (!tab || tab.url.startsWith("chrome://")) {
+      questionBox.value = "";
+      resultBox.textContent = "이 페이지에서는 사용 불가";
+      return;
+    }
+
     chrome.scripting.executeScript(
       {
-        target: { tabId: tabs[0].id },
+        target: { tabId: tab.id },
         func: () => window.getSelection().toString()
       },
       (res) => {
-        if (res && res[0]) {
-          questionBox.value = res[0].result || "";
-        }
+        if (!res || !res[0] || !res[0].result) return;
+        questionBox.value = res[0].result;
       }
     );
   });
@@ -27,11 +32,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function send(mode) {
     const question = questionBox.value.trim();
     if (!question) {
-      resultBox.textContent = "select the question.";
+      resultBox.textContent = "문제를 선택하세요.";
       return;
     }
 
-    resultBox.textContent = "thinking...";
+    resultBox.textContent = "생각 중...";
 
     fetch(workerUrl, {
       method: "POST",
@@ -42,11 +47,11 @@ document.addEventListener("DOMContentLoaded", () => {
       .then((data) => {
         resultBox.textContent =
           mode === "pick"
-            ? `answer: ${data.final}`
+            ? `정답: ${data.final}`
             : data.explanation || data.final;
       })
       .catch(() => {
-        resultBox.textContent = "error try again";
+        resultBox.textContent = "에러 발생";
       });
   }
 });
