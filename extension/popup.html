@@ -1,12 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <style>
+    body {
+      font-family: sans-serif;
+      width: 220px;
+      padding: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+    }
+    #result {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-  <button id="pick">Pick AI</button>
-  <pre id="result"></pre>
-
+  <button id="solve">Pick AI</button>
+  <div id="result"></div>
   <script src="popup.js"></script>
 </body>
 </html>
