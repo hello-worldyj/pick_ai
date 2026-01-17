@@ -1,106 +1,80 @@
 export default {
-  async fetch(req, env) {
-    if (req.method !== "POST") {
-      return json({ error: "Invalid request" }, 400);
+  async fetch(request, env) {
+    try {
+      if (request.method !== "POST") {
+        return new Response("OK", { status: 200 });
+      }
+
+      const body = await request.json();
+      const question = body.question;
+
+      if (!question) {
+        return new Response(
+          JSON.stringify({ error: "No question provided" }),
+          { status: 400 }
+        );
+      }
+
+      const answers = [];
+
+      for (let i = 0; i < 3; i++) {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": Bearer ${env.OPEN_AI_KEY},
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a strict exam solver. Return ONLY the final answer. No explanation."
+              },
+              {
+                role: "user",
+                content: question
+              }
+            ],
+            temperature: 0
+          })
+        });
+
+        const data = await res.json();
+        const answer = data.choices?.[0]?.message?.content?.trim();
+
+        if (answer) answers.push(answer);
+      }
+
+      // Pick AI 로직
+      const count = {};
+      for (const a of answers) {
+        count[a] = (count[a] || 0) + 1;
+      }
+
+      let final = answers[answers.length - 1];
+      for (const key in count) {
+        if (count[key] >= 2) final = key;
+      }
+
+      return new Response(
+        JSON.stringify({
+          final,
+          tries: answers.length,
+          mode: "pick"
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+    } catch (err) {
+      return new Response(
+        JSON.stringify({
+          error: "Worker crashed",
+          detail: err.message
+        }),
+        { status: 500 }
+      );
     }
-
-    const { question, image } = await req.json();
-
-    const result = await pickAI({
-      question,
-      image,
-      apiKey: env.OPEN_AI_KEY
-    });
-
-    return json(result);
   }
 };
-
-// --------------------
-// Pick AI 로직
-// --------------------
-async function pickAI({ question, image, apiKey }) {
-  const answers = {};
-  const MAX_TRIES = 8;
-
-  for (let i = 0; i < MAX_TRIES; i++) {
-    const raw = await callOpenAI({
-      question,
-      image,
-      apiKey
-    });
-
-    const answer = normalize(raw);
-
-    answers[answer] = (answers[answer] || 0) + 1;
-
-    // 같은 답 2번 나오면 즉시 확정
-    if (answers[answer] >= 2) {
-      return {
-        final: answer,
-        tries: i + 1,
-        mode: "pick"
-      };
-    }
-  }
-
-  // 끝까지 합의 안 되면 최다 득표
-  const sorted = Object.entries(answers)
-    .sort((a, b) => b[1] - a[1]);
-
-  return {
-    final: sorted[0][0],
-    tries: MAX_TRIES,
-    mode: "pick",
-    note: "low confidence"
-  };
-}
-
-// --------------------
-// OpenAI 호출
-// --------------------
-async function callOpenAI({ question, image, apiKey }) {
-  const input = image
-    ? [
-        { type: "input_text", text: question },
-        { type: "input_image", image_base64: image }
-      ]
-    : question;
-
-  const res = await fetch(
-    "https://api.openai.com/v1/responses",
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0,
-        input
-      })
-    }
-  );
-
-  const data = await res.json();
-  return data.output_text;
-}
-
-// --------------------
-// 정답 정리
-// --------------------
-function normalize(text) {
-  return text
-    .toString()
-    .trim()
-    .replace(/정답[:：]?\s*/i, "")
-    .replace(/\.$/, "");
-}
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" }
-  });
-}
