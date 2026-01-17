@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function run(mode = "pick") {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab || tab.url.startsWith("chrome://")) {
-        alert("이 페이지에서는 사용 불가");
+        alert("couldn't use on this site. We are sorry");
         return;
       }
 
