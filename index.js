@@ -1,32 +1,52 @@
 export default {
   async fetch(req, env) {
 
-    // ✅ CORS
     if (req.method === "OPTIONS") {
-      return new Response(null, {
-        headers: cors()
-      });
+      return new Response(null, { headers: cors() });
     }
 
     if (req.method !== "POST") {
       return json({ error: "Not allowed" }, 405);
     }
 
-    let body;
-    try {
-      body = await req.json();
-    } catch {
-      return json({ error: "Invalid JSON" }, 400);
+    const body = await req.json();
+
+    // OCR MODE
+    if (body.mode === "ocr") {
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.OPEN_AI_KEY}`
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Extract the question and give ONLY the final answer." },
+                  { type: "image_url", image_url: { url: body.image } }
+                ]
+              }
+            ],
+            temperature: 0
+          })
+        });
+
+        const data = await res.json();
+        return json({
+          final: data.choices[0].message.content.trim()
+        });
+      } catch {
+        return json({ error: "OCR failed" }, 500);
+      }
     }
 
-    const question = body.question;
-    if (!question) {
-      return json({ error: "No question" }, 400);
-    }
-
-    // 🔥 OpenAI 호출
+    // TEXT MODE
     try {
-      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -35,31 +55,18 @@ export default {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [
-            {
-              role: "system",
-              content: "Give only the final answer. No explanation."
-            },
-            {
-              role: "user",
-              content: question
-            }
+            { role: "system", content: "Give only the final answer." },
+            { role: "user", content: body.question }
           ],
           temperature: 0
         })
       });
 
-      const aiData = await aiRes.json();
-
-      const answer =
-        aiData?.choices?.[0]?.message?.content?.trim();
-
-      if (!answer) {
-        return json({ error: "AI failed" }, 500);
-      }
-
-      return json({ final: answer });
-
-    } catch (e) {
+      const data = await res.json();
+      return json({
+        final: data.choices[0].message.content.trim()
+      });
+    } catch {
       return json({ error: "AI server error" }, 500);
     }
   }
@@ -74,8 +81,8 @@ function cors() {
   };
 }
 
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
     status,
     headers: cors()
   });
