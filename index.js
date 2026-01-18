@@ -1,32 +1,35 @@
 export default {
   async fetch(req, env) {
     if (req.method !== "POST") {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Not allowed" }),
-        { status: 403 }
-      );
+      return new Response(JSON.stringify({ error: "Not allowed" }), { status: 403 });
     }
 
-    const body = await req.json();
-    const question = body.question;
-
+    const { question } = await req.json();
     if (!question) {
-      return new Response(
-        JSON.stringify({ ok: false }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ final: "No question" }));
     }
 
-    if (question.includes("1+1")) {
-      return new Response(
-        JSON.stringify({ final: "2" }),
-        { headers: { "Content-Type": "application/json" } }
-      );
-    }
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "Return ONLY the final answer." },
+          { role: "user", content: question }
+        ],
+        temperature: 0
+      })
+    });
 
-    return new Response(
-      JSON.stringify({ final: "Unknown" }),
-      { headers: { "Content-Type": "application/json" } }
-    );
+    const data = await res.json();
+    const answer = data.choices?.[0]?.message?.content || "Failed";
+
+    return new Response(JSON.stringify({ final: answer }), {
+      headers: { "Content-Type": "application/json" }
+    });
   }
 };
