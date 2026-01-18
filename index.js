@@ -1,6 +1,5 @@
 export default {
   async fetch(request, env) {
-    // POST만 허용
     if (request.method !== "POST") {
       return new Response(
         JSON.stringify({ ok: false, error: "Not allowed" }),
@@ -8,56 +7,61 @@ export default {
       );
     }
 
-    let data;
+    let body;
     try {
-      data = await request.json();
+      body = await request.json();
     } catch {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Invalid JSON" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      return Response.json({ ok: false }, { status: 400 });
     }
 
-    const question = (data.question || "").trim();
-
+    const question = (body.question || "").trim();
     if (!question) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Empty question" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      return Response.json({ ok: false });
     }
 
-    /*
-      ===============================
-      🔧 테스트용 로직 (AI 없이)
-      ===============================
-      extension 정상 동작 확인용
-    */
-    if (question.includes("1+1")) {
-      return new Response(
-        JSON.stringify({ ok: true, final: "2" }),
-        { headers: { "Content-Type": "application/json" } }
-      );
-    }
+    try {
+      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a solver. Return ONLY the final answer. No explanation. No extra words."
+            },
+            {
+              role: "user",
+              content: question
+            }
+          ],
+          temperature: 0
+        })
+      });
 
-    if (question.includes("2+2")) {
-      return new Response(
-        JSON.stringify({ ok: true, final: "4" }),
-        { headers: { "Content-Type": "application/json" } }
-      );
-    }
+      if (!aiRes.ok) {
+        return Response.json({ ok: false });
+      }
 
-    /*
-      ===============================
-      기본 fallback (절대 undefined 안 보냄)
-      ===============================
-    */
-    return new Response(
-      JSON.stringify({
+      const data = await aiRes.json();
+      const final =
+        data?.choices?.[0]?.message?.content?.trim();
+
+      if (!final) {
+        return Response.json({ ok: false });
+      }
+
+      return Response.json({
         ok: true,
-        final: "Unknown"
-      }),
-      { headers: { "Content-Type": "application/json" } }
-    );
+        final
+      });
+
+    } catch (e) {
+      return Response.json({ ok: false });
+    }
   }
 };
