@@ -2,4 +2,4 @@ name = "pickai"
 compatibility_date = "2024-12-01"
 
 [vars]
-OPEN_AI_KEY = "YOUR_OPENAI_KEY"
+OPEN_AI_KEY = " "
