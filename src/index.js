@@ -1,122 +1,110 @@
 export default {
-  async fetch(req, env) {
-    if (req.method !== "POST") {
-      return new Response("Not allowed", { status: 405 });
-    }
-
-    let body;
+  async fetch(request, env) {
     try {
-      body = await req.json();
-    } catch {
-      return json({ error: "Invalid JSON" }, 400);
-    }
+      if (request.method !== "POST") {
+        return new Response("Not allowed", { status: 405 });
+      }
 
-    if (body.type === "text") {
-      return handleText(body, env);
-    }
+      const body = await request.json();
 
-    if (body.type === "image") {
-      return handleImage(body, env);
-    }
+      // ======================
+      // TEXT → OpenAI
+      // ======================
+      if (body.type === "text") {
+        if (!env.OPEN_AI_KEY) {
+          return json({ error: "OPEN_AI_KEY missing" }, 500);
+        }
 
-    return json({ error: "Unknown type" }, 400);
-  }
-};
+        if (!body.question) {
+          return json({ error: "question missing" }, 400);
+        }
 
-/* ---------------- TEXT (ChatGPT) ---------------- */
+        const r = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: "Answer with final answer only. No explanation."
+              },
+              {
+                role: "user",
+                content: body.question
+              }
+            ]
+          })
+        });
 
-async function handleText(body, env) {
-  if (!env.OPEN_AI_KEY) {
-    return json({ error: "OPEN_AI_KEY missing" }, 500);
-  }
+        const data = await r.json();
 
-  const question = body.question;
-  if (!question) {
-    return json({ error: "No question" }, 400);
-  }
+        if (!data.choices) {
+          return json({ error: "OpenAI response invalid", detail: data }, 500);
+        }
 
-  try {
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "Answer briefly. Only the final answer." },
-          { role: "user", content: question }
-        ]
-      })
-    });
+        return json({
+          final: data.choices[0].message.content.trim()
+        });
+      }
 
-    const j = await r.json();
-    const answer = j.choices?.[0]?.message?.content;
+      // ======================
+      // IMAGE → Gemini
+      // ======================
+      if (body.type === "image") {
+        if (!env.GEMINI_API_KEY) {
+          return json({ error: "GEMINI_API_KEY missing" }, 500);
+        }
 
-    if (!answer) throw new Error("No answer");
+        if (!body.imageBase64) {
+          return json({ error: "imageBase64 missing" }, 400);
+        }
 
-    return json({ final: answer.trim() });
-
-  } catch (e) {
-    return json({ error: "AI server error" }, 500);
-  }
-}
-
-/* ---------------- IMAGE (Gemini) ---------------- */
-
-async function handleImage(body, env) {
-  if (!env.GEMINI_API_KEY) {
-    return json({ error: "GEMINI_API_KEY missing" }, 500);
-  }
-
-  const img = body.imageBase64;
-  if (!img) {
-    return json({ error: "No imageBase64" }, 400);
-  }
-
-  try {
-    const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
-        env.GEMINI_API_KEY,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
                 {
-                  inlineData: {
-                    mimeType: "image/png",
-                    data: img
-                  }
-                },
-                {
-                  text: "Solve the problem in the image. Answer only."
+                  parts: [
+                    {
+                      inline_data: {
+                        mime_type: "image/png",
+                        data: body.imageBase64
+                      }
+                    },
+                    {
+                      text: "Solve the problem in the image. Answer only."
+                    }
+                  ]
                 }
               ]
-            }
-          ]
-        })
+            })
+          }
+        );
+
+        const data = await r.json();
+
+        if (!data.candidates) {
+          return json({ error: "Gemini response invalid", detail: data }, 500);
+        }
+
+        return json({
+          final: data.candidates[0].content.parts[0].text.trim()
+        });
       }
-    );
 
-    const j = await r.json();
-    const answer =
-      j.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!answer) throw new Error("No answer");
-
-    return json({ final: answer.trim() });
-
-  } catch (e) {
-    return json({ error: "AI server error" }, 500);
+      return json({ error: "unknown type" }, 400);
+    } catch (e) {
+      return json({ error: "server crash", detail: String(e) }, 500);
+    }
   }
-}
-
-/* ---------------- UTIL ---------------- */
+};
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
