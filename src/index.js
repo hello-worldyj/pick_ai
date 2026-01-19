@@ -26,8 +26,8 @@ export default {
 /* ---------------- TEXT (ChatGPT) ---------------- */
 
 async function handleText(body, env) {
-  if (!env.OPENAI_API_KEY) {
-    return json({ error: "OPENAI_API_KEY missing" }, 500);
+  if (!env.OPEN_AI_KEY) {
+    return json({ error: "OPEN_AI_KEY missing" }, 500);
   }
 
   const question = body.question;
