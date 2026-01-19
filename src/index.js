@@ -1,113 +1,40 @@
 export default {
   async fetch(request, env) {
-    // ❌ GET 접근 차단
     if (request.method !== "POST") {
       return new Response("Not allowed", { status: 405 });
     }
 
-    let body;
     try {
-      body = await request.json();
-    } catch {
-      return json({ error: "Invalid JSON" }, 400);
-    }
+      const contentType = request.headers.get("content-type") || "";
 
-    const { type } = body;
+      // 🖼 이미지 업로드
+      if (contentType.includes("multipart/form-data")) {
+        const form = await request.formData();
+        const file = form.get("image");
 
-    try {
-      // =========================
-      // 🧠 TEXT → OpenAI
-      // =========================
-      if (type === "text") {
-        const question = body.question;
-        if (!question) {
-          return json({ error: "question missing" }, 400);
+        if (!file) {
+          return json({ error: "image missing" }, 400);
         }
 
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${env.OPEN_AI_KEY}`
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              {
-                role: "system",
-                content: "Answer the question. Answer only."
-              },
-              {
-                role: "user",
-                content: question
-              }
-            ],
-            temperature: 0
-          })
-        });
-
-        const data = await res.json();
-
-        if (!data.choices?.[0]?.message?.content) {
-          throw new Error("OpenAI response invalid");
-        }
-
-        return json({
-          final: data.choices[0].message.content.trim()
-        });
-      }
-
-      // =========================
-      // 🖼 IMAGE → Gemini
-      // =========================
-      if (type === "image") {
-        const base64 = body.imageBase64;
-        if (!base64) {
-          return json({ error: "imageBase64 missing" }, 400);
-        }
-
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    { text: "Solve the problem shown in the image. Answer only." },
-                    {
-                      inlineData: {
-                        mimeType: "image/png",
-                        data: base64
-                      }
-                    }
-                  ]
-                }
-              ]
-            })
-          }
+        const buffer = await file.arrayBuffer();
+        const base64 = btoa(
+          String.fromCharCode(...new Uint8Array(buffer))
         );
 
-        const data = await res.json();
-
-        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          throw new Error("Gemini response invalid");
-        }
-
-        return json({
-          final: data.candidates[0].content.parts[0].text.trim()
-        });
+        const answer = await callGeminiVision(base64, env.GEMINI_API_KEY);
+        return json({ final: answer });
       }
 
-      return json({ error: "Unknown type" }, 400);
+      // 📝 텍스트
+      const body = await request.json();
+      if (body.type === "text") {
+        const answer = await callOpenAI(body.question, env.OPEN_AI_KEY);
+        return json({ final: answer });
+      }
 
+      return json({ error: "invalid request" }, 400);
     } catch (e) {
-      return json({
-        error: "AI server error",
-        detail: e.message
-      }, 500);
+      return json({ error: "AI server error", detail: String(e) }, 500);
     }
   }
 };
@@ -115,9 +42,53 @@ export default {
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*"
-    }
+    headers: { "Content-Type": "application/json" }
   });
+}
+
+async function callGeminiVision(base64, apiKey) {
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
+      apiKey,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inline_data: {
+                  mime_type: "image/png",
+                  data: base64
+                }
+              },
+              { text: "Solve the problem and give only the final answer." }
+            ]
+          }
+        ]
+      })
+    }
+  );
+
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "No answer";
+}
+
+async function callOpenAI(text, apiKey) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: text }],
+      temperature: 0
+    })
+  });
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || "No answer";
 }
