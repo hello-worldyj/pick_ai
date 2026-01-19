@@ -7,7 +7,7 @@ export default {
     try {
       const contentType = request.headers.get("content-type") || "";
 
-      // 🖼 이미지 업로드
+      // 이미지 업로드
       if (contentType.includes("multipart/form-data")) {
         const form = await request.formData();
         const file = form.get("image");
@@ -25,7 +25,7 @@ export default {
         return json({ final: answer });
       }
 
-      // 📝 텍스트
+      // 텍스트
       const body = await request.json();
       if (body.type === "text") {
         const answer = await callOpenAI(body.question, env.OPEN_AI_KEY);
