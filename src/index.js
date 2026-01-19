@@ -1,5 +1,6 @@
 export default {
   async fetch(request, env) {
+    // ❌ GET 접근 차단
     if (request.method !== "POST") {
       return new Response("Not allowed", { status: 405 });
     }
@@ -11,63 +12,62 @@ export default {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    /* ---------------- TEXT (ChatGPT) ---------------- */
-    if (body.type === "text") {
-      if (!env.OPEN_AI_KEY) {
-        return json({ error: "OPEN_AI_KEY missing" }, 500);
-      }
+    const { type } = body;
 
-      if (!body.question) {
-        return json({ error: "question missing" }, 400);
-      }
+    try {
+      // =========================
+      // 🧠 TEXT → OpenAI
+      // =========================
+      if (type === "text") {
+        const question = body.question;
+        if (!question) {
+          return json({ error: "question missing" }, 400);
+        }
 
-      try {
-        const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.OPEN_AI_KEY}`
           },
           body: JSON.stringify({
             model: "gpt-4o-mini",
             messages: [
               {
+                role: "system",
+                content: "Answer the question. Answer only."
+              },
+              {
                 role: "user",
-                content: `Solve this problem. Answer only.\n\n${body.question}`
+                content: question
               }
             ],
             temperature: 0
           })
         });
 
-        const data = await r.json();
+        const data = await res.json();
 
-        if (!data.choices || !data.choices[0]) {
-          return json({ error: "OpenAI response invalid", detail: data }, 500);
+        if (!data.choices?.[0]?.message?.content) {
+          throw new Error("OpenAI response invalid");
         }
 
         return json({
           final: data.choices[0].message.content.trim()
         });
-
-      } catch (e) {
-        return json({ error: "AI server error", detail: String(e) }, 500);
-      }
-    }
-
-    /* ---------------- IMAGE (Gemini Vision) ---------------- */
-    if (body.type === "image") {
-      if (!env.GEMINI_API_KEY) {
-        return json({ error: "GEMINI_API_KEY missing" }, 500);
       }
 
-      if (!body.imageBase64) {
-        return json({ error: "imageBase64 missing" }, 400);
-      }
+      // =========================
+      // 🖼 IMAGE → Gemini
+      // =========================
+      if (type === "image") {
+        const base64 = body.imageBase64;
+        if (!base64) {
+          return json({ error: "imageBase64 missing" }, 400);
+        }
 
-      try {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro-vision:generateContent?key=${env.GEMINI_API_KEY}`,
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -76,14 +76,12 @@ export default {
                 {
                   role: "user",
                   parts: [
+                    { text: "Solve the problem shown in the image. Answer only." },
                     {
-                      inline_data: {
-                        mime_type: "image/png",
-                        data: body.imageBase64
+                      inlineData: {
+                        mimeType: "image/png",
+                        data: base64
                       }
-                    },
-                    {
-                      text: "Solve the problem in the image. Answer only."
                     }
                   ]
                 }
@@ -92,29 +90,34 @@ export default {
           }
         );
 
-        const data = await r.json();
+        const data = await res.json();
 
-        if (!data.candidates || !data.candidates[0]) {
-          return json({ error: "Gemini response invalid", detail: data }, 500);
+        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          throw new Error("Gemini response invalid");
         }
 
         return json({
           final: data.candidates[0].content.parts[0].text.trim()
         });
-
-      } catch (e) {
-        return json({ error: "AI server error", detail: String(e) }, 500);
       }
-    }
 
-    return json({ error: "Unknown type" }, 400);
+      return json({ error: "Unknown type" }, 400);
+
+    } catch (e) {
+      return json({
+        error: "AI server error",
+        detail: e.message
+      }, 500);
+    }
   }
 };
 
-/* ---------------- helper ---------------- */
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { "Content-Type": "application/json" }
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*"
+    }
   });
 }
