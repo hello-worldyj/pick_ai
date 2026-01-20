@@ -1,44 +1,62 @@
 export default {
   async fetch(req, env) {
-    if (req.method === "OPTIONS") {
-      return cors();
-    }
-
     try {
-      const body = await req.json();
-
-      if (body.type !== "image") {
-        return json({ final: "No answer" });
+      if (req.method !== "POST") {
+        return new Response("Not allowed", { status: 405 });
       }
 
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "Solve all math problems in this image. Return only answers." },
-                { type: "image_url", image_url: { url: body.imageBase64 } }
+      const body = await req.json();
+
+      /* ---------- TEXT ---------- */
+      if (body.type === "text") {
+        const question = body.question?.trim();
+        if (!question) {
+          return json({ final: "질문이 비어 있어요" });
+        }
+
+        const res = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" +
+            env.GEMINI_API_KEY,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: "문제를 풀고 정답만 간단히 써:\n" + question }]
+                }
               ]
-            }
-          ],
-          temperature: 0
-        })
+            })
+          }
+        );
+
+        const data = await res.json();
+
+        const answer =
+          data?.candidates?.[0]?.content?.parts
+            ?.map(p => p.text)
+            ?.join("")
+            ?.trim();
+
+        return json({
+          final: answer || "답변을 생성하지 못했어요"
+        });
+      }
+
+      /* ---------- IMAGE (placeholder) ---------- */
+      if (body.type === "image") {
+        return json({
+          final: "이미지 풀이는 아직 연결 중이에요"
+        });
+      }
+
+      return json({ final: "Unknown request" });
+    } catch (e) {
+      return json({
+        final: "서버 오류",
+        detail: String(e)
       });
-
-      const data = await res.json();
-      const answer =
-        data?.choices?.[0]?.message?.content?.trim() || "No answer";
-
-      return json({ final: answer });
-    } catch {
-      return json({ final: "No answer" });
     }
   }
 };
@@ -48,16 +66,6 @@ function json(obj) {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*"
-    }
-  });
-}
-
-function cors() {
-  return new Response(null, {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
     }
   });
 }
