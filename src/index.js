@@ -7,7 +7,9 @@ export default {
     try {
       const contentType = request.headers.get("content-type") || "";
 
-      // 🖼 이미지 업로드 (multipart/form-data)
+      // =========================
+      // 🖼 IMAGE (multipart/form-data)
+      // =========================
       if (contentType.includes("multipart/form-data")) {
         const form = await request.formData();
         const file = form.get("image");
@@ -19,23 +21,42 @@ export default {
         const buffer = await file.arrayBuffer();
         const base64 = arrayBufferToBase64(buffer);
 
-        const answer = await callGeminiVision(base64, env.GEMINI_API_KEY);
+        const answer = await callGeminiVision(
+          base64,
+          file.type || "image/png",
+          env.GEMINI_API_KEY
+        );
+
         return json({ final: answer });
       }
 
-      // 📝 텍스트
+      // =========================
+      // 📝 TEXT (JSON)
+      // =========================
       const body = await request.json();
-      if (body.type === "text") {
-        const answer = await callOpenAI(body.question, env.OPEN_AI_KEY);
+
+      if (body.type === "text" && body.question) {
+        const answer = await callOpenAI(
+          body.question,
+          env.OPEN_AI_KEY
+        );
         return json({ final: answer });
       }
 
       return json({ error: "invalid request" }, 400);
+
     } catch (e) {
-      return json({ error: "AI server error", detail: String(e) }, 500);
+      return json(
+        { error: "AI server error", detail: String(e) },
+        500
+      );
     }
   }
 };
+
+// =========================
+// helpers
+// =========================
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -45,22 +66,26 @@ function json(obj, status = 200) {
 }
 
 /**
- * ✅ 안전한 base64 변환 (콜스택 안 터짐)
+ * ✅ SAFE base64 (stack overflow 방지)
  */
 function arrayBufferToBase64(buffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000; // 32KB씩
+  const chunkSize = 0x8000;
 
   for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
+    binary += String.fromCharCode(
+      ...bytes.subarray(i, i + chunkSize)
+    );
   }
 
   return btoa(binary);
 }
 
-async function callGeminiVision(base64, apiKey) {
+// =========================
+// Gemini Vision (IMAGE)
+// =========================
+async function callGeminiVision(base64, mimeType, apiKey) {
   const res = await fetch(
     "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
       apiKey,
@@ -73,12 +98,13 @@ async function callGeminiVision(base64, apiKey) {
             parts: [
               {
                 inline_data: {
-                  mime_type: "image/png",
+                  mime_type: mimeType,
                   data: base64
                 }
               },
               {
-                text: "Solve the problem and give only the final answer."
+                text:
+                  "Solve the problem shown in the image. Reply with ONLY the final answer. No explanation."
               }
             ]
           }
@@ -88,26 +114,49 @@ async function callGeminiVision(base64, apiKey) {
   );
 
   const data = await res.json();
-  return (
-    data.candidates?.[0]?.content?.parts?.[0]?.text ??
-    "No answer"
-  );
+
+  const parts = data.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "No answer";
+
+  for (const p of parts) {
+    if (typeof p.text === "string" && p.text.trim()) {
+      return p.text.trim();
+    }
+  }
+
+  return "No answer";
 }
 
+// =========================
+// OpenAI (TEXT)
+// =========================
 async function callOpenAI(text, apiKey) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: text }],
-      temperature: 0
-    })
-  });
+  const res = await fetch(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content:
+              "Solve this and reply with ONLY the final answer:\n" +
+              text
+          }
+        ],
+        temperature: 0
+      })
+    }
+  );
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "No answer";
+  return (
+    data.choices?.[0]?.message?.content?.trim() ||
+    "No answer"
+  );
 }
