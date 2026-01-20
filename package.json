@@ -1,7 +1,5 @@
 {
   "name": "pickai-worker",
-  "type": "module",
-  "scripts": {
-    "deploy": "wrangler deploy"
-  }
+  "private": true,
+  "dependencies": {}
 }
