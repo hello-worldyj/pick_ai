@@ -1,5 +1,6 @@
 {
-  "name": "pickai",
+  "name": "pick-ai-worker",
   "private": true,
+  "version": "1.0.0",
   "type": "module"
 }
