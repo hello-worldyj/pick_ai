@@ -1,93 +1,74 @@
 export default {
   async fetch(req, env) {
-
-    // ========================
-    // CORS PRE-FLIGHT
-    // ========================
+    // ---------- CORS ----------
     if (req.method === "OPTIONS") {
       return new Response(null, {
-        headers: cors()
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type"
+        }
       });
     }
 
     if (req.method !== "POST") {
-      return json({ error: "Not allowed" }, 405);
+      return new Response("Not allowed", { status: 405 });
     }
 
     try {
       const body = await req.json();
-      const question = (body.question || "").trim();
+      const question = body.question?.trim();
 
-      if (!question) {
-        return json({ final: "문제를 인식하지 못했어요" });
+      if (!question || question.length < 3) {
+        return json({ error: "INVALID_QUESTION" }, 400);
       }
 
-      // ========================
-      // OPENAI REQUEST
-      // ========================
-      const r = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            temperature: 0,
-            max_tokens: 700,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "너는 시험 문제를 푸는 AI다. 문제가 불완전해도 반드시 추론해서 답을 만들어라. 절대 빈 응답을 하지 마라."
-              },
-              {
-                role: "user",
-                content:
-                  "다음 문제를 풀어라. 설명 없이 정답만 출력하라.\n\n" +
-                  question
-              }
-            ]
-          })
-        }
-      );
+      // ---------- OpenAI Responses API ----------
+      const aiRes = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: `다음 문제를 정확히 풀고 최종 답만 출력해:\n${question}`
+        })
+      });
 
-      const data = await r.json();
+      if (!aiRes.ok) {
+        const t = await aiRes.text();
+        throw new Error(t);
+      }
 
-      let answer =
-        data?.choices?.[0]?.message?.content?.trim();
+      const data = await aiRes.json();
+
+      const answer =
+        data.output?.[0]?.content?.[0]?.text ||
+        data.output_text;
 
       if (!answer) {
-        answer = "문제를 해석할 수 없지만 가장 가능성 높은 답을 선택함";
+        throw new Error("NO_AI_OUTPUT");
       }
 
       return json({ final: answer });
 
     } catch (e) {
-      return json({ final: "AI server error" }, 500);
+      return json({
+        error: "AI_FAILED",
+        detail: e.message
+      }, 500);
     }
   }
 };
 
-// ========================
-// HELPERS
-// ========================
-function cors() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
-  };
-}
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+// ---------- helper ----------
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...cors()
+      "Access-Control-Allow-Origin": "*"
     }
   });
 }
