@@ -1,6 +1,5 @@
 export default {
   async fetch(req, env) {
-    // CORS preflight
     if (req.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -12,33 +11,51 @@ export default {
     }
 
     try {
-      if (req.method !== "POST") {
-        return new Response("Not allowed", { status: 405 });
+      const body = await req.json();
+      const question = body.question?.trim();
+
+      if (!question) {
+        return json({ final: "질문 없음" });
       }
 
-      const body = await req.json();
-      const question = (body.question || "").trim();
-
-      let final = "답변을 생성하지 못했어요";
-
-      // 🔴 테스트용 기본 로직 (AI 안 써도 무조건 동작)
-      if (question === "1+1" || question === "1+1?") final = "2";
-      else if (question.length > 0) final = "unable to solve";
-
-      return new Response(JSON.stringify({ final }), {
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        }
+          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "너는 모든 문제를 정확히 푸는 AI다. 수학, 영어, 독해 전부 풀어라."
+            },
+            { role: "user", content: question }
+          ],
+          temperature: 0.2
+        })
       });
 
+      const data = await r.json();
+      const answer =
+        data?.choices?.[0]?.message?.content?.trim() ||
+        "답변을 생성하지 못했어요";
+
+      return json({ final: answer });
     } catch (e) {
-      return new Response(JSON.stringify({ error: "server error" }), {
-        status: 500,
-        headers: {
-          "Access-Control-Allow-Origin": "*"
-        }
-      });
+      return json({ final: "AI server error" }, 500);
     }
   }
 };
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*"
+    }
+  });
+}
