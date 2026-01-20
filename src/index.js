@@ -8,7 +8,7 @@ export default {
       const contentType = request.headers.get("content-type") || "";
 
       // =========================
-      // 🖼 IMAGE (multipart/form-data)
+      // IMAGE
       // =========================
       if (contentType.includes("multipart/form-data")) {
         const form = await request.formData();
@@ -31,7 +31,7 @@ export default {
       }
 
       // =========================
-      // 📝 TEXT (JSON)
+      // TEXT
       // =========================
       const body = await request.json();
 
@@ -44,7 +44,6 @@ export default {
       }
 
       return json({ error: "invalid request" }, 400);
-
     } catch (e) {
       return json(
         { error: "AI server error", detail: String(e) },
@@ -57,7 +56,6 @@ export default {
 // =========================
 // helpers
 // =========================
-
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -65,9 +63,6 @@ function json(obj, status = 200) {
   });
 }
 
-/**
- * ✅ SAFE base64 (stack overflow 방지)
- */
 function arrayBufferToBase64(buffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -83,7 +78,7 @@ function arrayBufferToBase64(buffer) {
 }
 
 // =========================
-// Gemini Vision (IMAGE)
+// Gemini Vision
 // =========================
 async function callGeminiVision(base64, mimeType, apiKey) {
   const res = await fetch(
@@ -95,6 +90,7 @@ async function callGeminiVision(base64, mimeType, apiKey) {
       body: JSON.stringify({
         contents: [
           {
+            role: "user",
             parts: [
               {
                 inline_data: {
@@ -104,7 +100,7 @@ async function callGeminiVision(base64, mimeType, apiKey) {
               },
               {
                 text:
-                  "Solve the problem shown in the image. Reply with ONLY the final answer. No explanation."
+                  "This is a math problem. Reply with ONLY the final numeric answer. No explanation."
               }
             ]
           }
@@ -115,20 +111,28 @@ async function callGeminiVision(base64, mimeType, apiKey) {
 
   const data = await res.json();
 
-  const parts = data.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return "No answer";
+  const parts =
+    data.candidates?.[0]?.content?.parts || [];
 
-  for (const p of parts) {
-    if (typeof p.text === "string" && p.text.trim()) {
-      return p.text.trim();
-    }
-  }
+  // ✅ 모든 text 합치기
+  let fullText = parts
+    .map(p => p.text || "")
+    .join("\n")
+    .trim();
 
-  return "No answer";
+  if (!fullText) return "No answer";
+
+  // ✅ 마지막 줄을 정답으로 간주
+  const lines = fullText
+    .split("\n")
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  return lines[lines.length - 1];
 }
 
 // =========================
-// OpenAI (TEXT)
+// OpenAI TEXT
 // =========================
 async function callOpenAI(text, apiKey) {
   const res = await fetch(
