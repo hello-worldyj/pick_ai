@@ -1,117 +1,90 @@
 export default {
   async fetch(request, env) {
-    if (request.method !== "POST") {
-      return response("Not allowed", 405);
+    // 🔥 CORS 헤더
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+
+    // preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
     }
 
-    let body;
     try {
-      body = await request.json();
-    } catch {
-      return json({ error: "Invalid JSON" }, 400);
-    }
+      const body = await request.json();
 
-    // =========================
-    // TEXT → OpenAI
-    // =========================
-    if (body.type === "text") {
-      if (!body.question) {
-        return json({ error: "question missing" }, 400);
-      }
-
-      try {
-        const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      // ---------- TEXT ----------
+      if (body.type === "text") {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             model: "gpt-4o-mini",
-            temperature: 0,
             messages: [
-              {
-                role: "system",
-                content: "Answer ONLY the final answer. No explanation."
-              },
-              {
-                role: "user",
-                content: body.question
-              }
-            ]
-          })
+              { role: "system", content: "Solve and return ONLY the final answer." },
+              { role: "user", content: body.question }
+            ],
+          }),
         });
 
-        const j = await r.json();
-        const answer = j.choices?.[0]?.message?.content?.trim();
+        const data = await res.json();
+        const answer = data.choices?.[0]?.message?.content ?? "No answer";
 
-        return json({ final: answer || "No answer" });
-      } catch (e) {
-        return json({ error: "AI server error", detail: String(e) }, 500);
-      }
-    }
-
-    // =========================
-    // IMAGE → Gemini Vision
-    // =========================
-    if (body.type === "image") {
-      if (!body.imageBase64) {
-        return json({ error: "imageBase64 missing" }, 400);
+        return new Response(
+          JSON.stringify({ final: answer }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      try {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${env.GEMINI_API_KEY}`,
+      // ---------- IMAGE ----------
+      if (body.type === "image") {
+        const res = await fetch(
+          "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
+            env.GEMINI_API_KEY,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      inlineData: {
-                        // 🔥 핵심: mimeType 강제 jpeg
-                        mimeType: "image/jpeg",
-                        data: body.imageBase64
-                      }
-                    },
-                    {
-                      text: "Solve the problem in this image and return ONLY the final answer."
+              contents: [{
+                parts: [
+                  { text: "Solve the problem in this image. Return ONLY the final answer." },
+                  {
+                    inline_data: {
+                      mime_type: "image/png",
+                      data: body.imageBase64
                     }
-                  ]
-                }
-              ]
-            })
+                  }
+                ]
+              }]
+            }),
           }
         );
 
-        const j = await r.json();
+        const data = await res.json();
+        const answer =
+          data.candidates?.[0]?.content?.parts?.[0]?.text ?? "No answer";
 
-        const parts = j.candidates?.[0]?.content?.parts || [];
-        const text = parts
-          .map(p => p.text)
-          .filter(Boolean)
-          .join("\n")
-          .trim();
-
-        return json({ final: text || "No answer" });
-      } catch (e) {
-        return json({ error: "AI server error", detail: String(e) }, 500);
+        return new Response(
+          JSON.stringify({ final: answer }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+
+      return new Response(
+        JSON.stringify({ error: "Invalid request" }),
+        { status: 400, headers: corsHeaders }
+      );
+
+    } catch (err) {
+      return new Response(
+        JSON.stringify({ error: "Server error", detail: String(err) }),
+        { status: 500, headers: corsHeaders }
+      );
     }
-
-    return json({ error: "Unknown type" }, 400);
-  }
+  },
 };
-
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json" }
-  });
-}
-
-function response(text, status = 200) {
-  return new Response(text, { status });
-}
