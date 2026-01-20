@@ -1,7 +1,7 @@
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
-      return new Response("Not allowed", { status: 405 });
+      return response("Not allowed", 405);
     }
 
     let body;
@@ -28,6 +28,7 @@ export default {
           },
           body: JSON.stringify({
             model: "gpt-4o-mini",
+            temperature: 0,
             messages: [
               {
                 role: "system",
@@ -37,15 +38,14 @@ export default {
                 role: "user",
                 content: body.question
               }
-            ],
-            temperature: 0
+            ]
           })
         });
 
         const j = await r.json();
-        const text = j.choices?.[0]?.message?.content?.trim();
+        const answer = j.choices?.[0]?.message?.content?.trim();
 
-        return json({ final: text || "No answer" });
+        return json({ final: answer || "No answer" });
       } catch (e) {
         return json({ error: "AI server error", detail: String(e) }, 500);
       }
@@ -71,12 +71,13 @@ export default {
                   parts: [
                     {
                       inlineData: {
-                        mimeType: "image/png",
+                        // 🔥 핵심: mimeType 강제 jpeg
+                        mimeType: "image/jpeg",
                         data: body.imageBase64
                       }
                     },
                     {
-                      text: "Solve the problem in the image. Return ONLY the final answer."
+                      text: "Solve the problem in this image and return ONLY the final answer."
                     }
                   ]
                 }
@@ -109,4 +110,8 @@ function json(obj, status = 200) {
     status,
     headers: { "Content-Type": "application/json" }
   });
+}
+
+function response(text, status = 200) {
+  return new Response(text, { status });
 }
