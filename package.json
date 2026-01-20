@@ -1,6 +1,7 @@
 {
-  "name": "pick-ai-worker",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module"
+  "name": "pickai-worker",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  }
 }
