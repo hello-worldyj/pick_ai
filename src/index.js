@@ -7,7 +7,7 @@ export default {
     try {
       const contentType = request.headers.get("content-type") || "";
 
-      // 🖼 이미지 업로드
+      // 🖼 이미지 업로드 (multipart/form-data)
       if (contentType.includes("multipart/form-data")) {
         const form = await request.formData();
         const file = form.get("image");
@@ -17,9 +17,7 @@ export default {
         }
 
         const buffer = await file.arrayBuffer();
-        const base64 = btoa(
-          String.fromCharCode(...new Uint8Array(buffer))
-        );
+        const base64 = arrayBufferToBase64(buffer);
 
         const answer = await callGeminiVision(base64, env.GEMINI_API_KEY);
         return json({ final: answer });
@@ -46,6 +44,22 @@ function json(obj, status = 200) {
   });
 }
 
+/**
+ * ✅ 안전한 base64 변환 (콜스택 안 터짐)
+ */
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000; // 32KB씩
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
 async function callGeminiVision(base64, apiKey) {
   const res = await fetch(
     "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
@@ -63,7 +77,9 @@ async function callGeminiVision(base64, apiKey) {
                   data: base64
                 }
               },
-              { text: "Solve the problem and give only the final answer." }
+              {
+                text: "Solve the problem and give only the final answer."
+              }
             ]
           }
         ]
@@ -72,7 +88,10 @@ async function callGeminiVision(base64, apiKey) {
   );
 
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "No answer";
+  return (
+    data.candidates?.[0]?.content?.parts?.[0]?.text ??
+    "No answer"
+  );
 }
 
 async function callOpenAI(text, apiKey) {
@@ -90,5 +109,5 @@ async function callOpenAI(text, apiKey) {
   });
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || "No answer";
+  return data.choices?.[0]?.message?.content ?? "No answer";
 }
