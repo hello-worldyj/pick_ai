@@ -1,52 +1,46 @@
 export default {
   async fetch(request, env) {
-    if (request.method !== "POST") {
-      return new Response("Not allowed", { status: 405 });
-    }
-
     try {
-      const contentType = request.headers.get("content-type") || "";
+      if (request.method !== "POST") {
+        return new Response("Not allowed", { status: 405 });
+      }
+
+      const body = await request.json();
 
       // =========================
-      // IMAGE
+      // TEXT MODE (OpenAI)
       // =========================
-      if (contentType.includes("multipart/form-data")) {
-        const form = await request.formData();
-        const file = form.get("image");
-
-        if (!file) {
-          return json({ error: "image missing" }, 400);
+      if (body.type === "text") {
+        if (!body.question) {
+          return json({ error: "question missing" }, 400);
         }
 
-        const buffer = await file.arrayBuffer();
-        const base64 = arrayBufferToBase64(buffer);
+        const answer = await callOpenAI(body.question, env.OPEN_AI_KEY);
+        return json({ final: answer });
+      }
 
+      // =========================
+      // IMAGE MODE (Gemini)
+      // =========================
+      if (body.type === "image") {
+        if (!body.imageBase64) {
+          return json({ error: "imageBase64 missing" }, 400);
+        }
+
+        const base64 = body.imageBase64.replace(/^data:image\/\w+;base64,/, "");
         const answer = await callGeminiVision(
           base64,
-          file.type || "image/png",
+          "image/png",
           env.GEMINI_API_KEY
         );
 
         return json({ final: answer });
       }
 
-      // =========================
-      // TEXT
-      // =========================
-      const body = await request.json();
-
-      if (body.type === "text" && body.question) {
-        const answer = await callOpenAI(
-          body.question,
-          env.OPEN_AI_KEY
-        );
-        return json({ final: answer });
-      }
-
-      return json({ error: "invalid request" }, 400);
-    } catch (e) {
+      return json({ error: "invalid type" }, 400);
+    } catch (err) {
       return json(
-        { error: "AI server error", detail: String(e) },
+        { error: "AI server error", detail: err.message },
         500
       );
     }
@@ -54,31 +48,39 @@ export default {
 };
 
 // =========================
-// helpers
+// OpenAI (TEXT)
 // =========================
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json" }
+async function callOpenAI(question, apiKey) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + apiKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content:
+            "Solve this math problem. Reply with ONLY the final answer:\n" +
+            question
+        }
+      ],
+      temperature: 0
+    })
   });
-}
 
-function arrayBufferToBase64(buffer) {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
+  const data = await res.json();
 
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(
-      ...bytes.subarray(i, i + chunkSize)
-    );
-  }
-
-  return btoa(binary);
+  return (
+    data.choices?.[0]?.message?.content?.trim() ||
+    "No answer"
+  );
 }
 
 // =========================
-// Gemini Vision
+// Gemini Vision (IMAGE)
 // =========================
 async function callGeminiVision(base64, mimeType, apiKey) {
   const res = await fetch(
@@ -100,7 +102,7 @@ async function callGeminiVision(base64, mimeType, apiKey) {
               },
               {
                 text:
-                  "This is a math problem. Reply with ONLY the final numeric answer. No explanation."
+                  "Read the math problem in the image carefully. Then reply with ONLY the final answer."
               }
             ]
           }
@@ -114,53 +116,20 @@ async function callGeminiVision(base64, mimeType, apiKey) {
   const parts =
     data.candidates?.[0]?.content?.parts || [];
 
-  // ✅ 모든 text 합치기
-  let fullText = parts
-    .map(p => p.text || "")
-    .join("\n")
-    .trim();
+  let text = parts.map(p => p.text || "").join("\n").trim();
 
-  if (!fullText) return "No answer";
+  if (!text) return "No answer";
 
-  // ✅ 마지막 줄을 정답으로 간주
-  const lines = fullText
-    .split("\n")
-    .map(l => l.trim())
-    .filter(Boolean);
-
-  return lines[lines.length - 1];
+  const match = text.match(/-?\d+(\.\d+)?/);
+  return match ? match[0] : text;
 }
 
 // =========================
-// OpenAI TEXT
+// JSON helper
 // =========================
-async function callOpenAI(text, apiKey) {
-  const res = await fetch(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content:
-              "Solve this and reply with ONLY the final answer:\n" +
-              text
-          }
-        ],
-        temperature: 0
-      })
-    }
-  );
-
-  const data = await res.json();
-  return (
-    data.choices?.[0]?.message?.content?.trim() ||
-    "No answer"
-  );
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json" }
+  });
 }
