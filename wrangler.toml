@@ -1,3 +1,9 @@
 name = "pickai"
-main = "worker.js"
-compatibility_date = "2024-01-01"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# 여기에 키 직접 쓰지 마!!!
+# Cloudflare Dashboard → Settings → Secrets 에서 넣어
+# OPEN_AI_KEY
+# GEMINI_API_KEY
