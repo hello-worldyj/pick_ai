@@ -1,69 +1,119 @@
 export default {
-  async fetch(request, env) {
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type"
-        }
-      });
+  async fetch(req, env) {
+    const headers = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "application/json"
+    };
+
+    if (req.method === "OPTIONS") {
+      return new Response(null, { headers });
     }
 
+    if (req.method !== "POST") {
+      return new Response(
+        JSON.stringify({ error: "Not allowed" }),
+        { status: 405, headers }
+      );
+    }
+
+    let body;
     try {
-      const body = await request.json();
-      const question = body.question;
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON" }),
+        { status: 400, headers }
+      );
+    }
 
-      if (!question) {
-        return json({ error: "question missing" }, 400);
-      }
+    const question = body.question;
+    if (!question || typeof question !== "string") {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_input",
+          reason: "question field missing or not string"
+        }),
+        { status: 400, headers }
+      );
+    }
 
-      const openaiRes = await fetch("https://api.openai.com/v1/responses", {
+    let aiRes;
+    try {
+      aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          input: [
+          model: "gpt-4o-mini",
+          temperature: 0,
+          messages: [
             {
               role: "system",
-              content: "You are a world-class math tutor. Always solve the problem and output ONLY the final answer."
+              content:
+                "You are a precise problem solver. Solve the problem. Return ONLY the final answer. No explanation."
             },
             {
               role: "user",
               content: question
             }
-          ],
-          max_output_tokens: 200
+          ]
         })
       });
-
-      const data = await openaiRes.json();
-
-      const text =
-        data.output_text ||
-        data.output?.[0]?.content?.[0]?.text ||
-        null;
-
-      if (!text) {
-        return json({ final: "답변을 생성하지 못했어요" });
-      }
-
-      return json({ final: text.trim() });
     } catch (e) {
-      return json({ error: "AI server error", detail: String(e) }, 500);
+      return new Response(
+        JSON.stringify({
+          error: "network_error",
+          reason: String(e)
+        }),
+        { status: 500, headers }
+      );
     }
+
+    let data;
+    try {
+      data = await aiRes.json();
+    } catch {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_ai_response",
+          reason: "AI response not JSON"
+        }),
+        { status: 500, headers }
+      );
+    }
+
+    if (!aiRes.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "ai_error",
+          status: aiRes.status,
+          detail: data
+        }),
+        { status: 500, headers }
+      );
+    }
+
+    const answer =
+      data?.choices?.[0]?.message?.content?.trim();
+
+    if (!answer) {
+      return new Response(
+        JSON.stringify({
+          error: "unable_to_solve",
+          reason: "AI returned empty answer",
+          raw: data
+        }),
+        { status: 200, headers }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ final: answer }),
+      { headers }
+    );
   }
 };
-
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*"
-    }
-  });
-}
