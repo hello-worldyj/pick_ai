@@ -1,25 +1,16 @@
 export default {
-  async fetch(request, env) {
-    /* ✅ CORS & preflight */
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type"
-        }
-      });
+  async fetch(req, env) {
+    if (req.method === "OPTIONS") {
+      return cors();
     }
 
     try {
-      const body = await request.json();
-      const question = body.question?.trim();
+      const body = await req.json();
 
-      if (!question) {
+      if (body.type !== "image") {
         return json({ final: "No answer" });
       }
 
-      /* 🔹 OpenAI text only */
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -27,13 +18,15 @@ export default {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: [
             {
-              role: "system",
-              content: "Return only the final answer. No explanation."
-            },
-            { role: "user", content: question }
+              role: "user",
+              content: [
+                { type: "text", text: "Solve all math problems in this image. Return only answers." },
+                { type: "image_url", image_url: { url: body.imageBase64 } }
+              ]
+            }
           ],
           temperature: 0
         })
@@ -55,6 +48,16 @@ function json(obj) {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*"
+    }
+  });
+}
+
+function cors() {
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
     }
   });
 }
