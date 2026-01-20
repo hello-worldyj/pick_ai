@@ -1,119 +1,71 @@
 export default {
-  async fetch(req, env) {
-    const headers = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Content-Type": "application/json"
-    };
-
-    if (req.method === "OPTIONS") {
-      return new Response(null, { headers });
+  async fetch(request, env) {
+    // ===== CORS =====
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: corsHeaders(),
+      });
     }
 
-    if (req.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: "Not allowed" }),
-        { status: 405, headers }
-      );
-    }
-
-    let body;
     try {
-      body = await req.json();
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON" }),
-        { status: 400, headers }
-      );
-    }
+      const body = await request.json();
+      const question =
+        body.question ||
+        body.text ||
+        body.prompt ||
+        "";
 
-    const question = body.question;
-    if (!question || typeof question !== "string") {
-      return new Response(
-        JSON.stringify({
-          error: "invalid_input",
-          reason: "question field missing or not string"
-        }),
-        { status: 400, headers }
-      );
-    }
+      if (!question.trim()) {
+        return json({ final: "문제가 비어 있음" });
+      }
 
-    let aiRes;
-    try {
-      aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${env.OPEN_AI_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          temperature: 0,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a precise problem solver. Solve the problem. Return ONLY the final answer. No explanation."
-            },
-            {
-              role: "user",
-              content: question
-            }
-          ]
-        })
+      const res = await fetch(
+        "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
+          env.GEMINI_API_KEY,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: question }],
+              },
+            ],
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      const answer =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      return json({
+        final: answer || "답변을 생성하지 못했어요",
       });
     } catch (e) {
-      return new Response(
-        JSON.stringify({
-          error: "network_error",
-          reason: String(e)
-        }),
-        { status: 500, headers }
-      );
+      return json({
+        error: "AI server error",
+        detail: String(e),
+      });
     }
-
-    let data;
-    try {
-      data = await aiRes.json();
-    } catch {
-      return new Response(
-        JSON.stringify({
-          error: "invalid_ai_response",
-          reason: "AI response not JSON"
-        }),
-        { status: 500, headers }
-      );
-    }
-
-    if (!aiRes.ok) {
-      return new Response(
-        JSON.stringify({
-          error: "ai_error",
-          status: aiRes.status,
-          detail: data
-        }),
-        { status: 500, headers }
-      );
-    }
-
-    const answer =
-      data?.choices?.[0]?.message?.content?.trim();
-
-    if (!answer) {
-      return new Response(
-        JSON.stringify({
-          error: "unable_to_solve",
-          reason: "AI returned empty answer",
-          raw: data
-        }),
-        { status: 200, headers }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({ final: answer }),
-      { headers }
-    );
-  }
+  },
 };
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+function json(obj) {
+  return new Response(JSON.stringify(obj), {
+    headers: {
+      "Content-Type": "application/json",
+      ...corsHeaders(),
+    },
+  });
+}
