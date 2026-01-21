@@ -51,7 +51,7 @@ export default {
       const answer = data.choices?.[0]?.message?.content?.trim();
 
       return new Response(
-        JSON.stringify({ final: answer || "Unable to solve" }),
+        JSON.stringify({ final: answer || "bug" }),
         { headers: corsHeaders }
       );
 
