@@ -2,60 +2,33 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>PickAI OCR Test</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+  <title>PickAI Test Page</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 18px; }
-    #ocrResult { margin-top: 12px; font-family: monospace; color: #0f0; }
-    #answer { margin-top: 12px; font-family: monospace; color: #0ff; }
-    #sendBtn { margin-left: 8px; }
+    body { font-family: Arial; padding: 18px; }
+    #ocrResult{ margin-top:8px; color:#080; font-family:monospace; }
+    #answer{ margin-top:12px; color:#009; font-family:monospace; }
   </style>
 </head>
 <body>
-  <h2>PickAI OCR Test Page</h2>
-  <input type="file" id="file" accept="image/*">
-  <button id="ocrBtn">OCR & Send</button>
-  <button id="testBtn">Quick Test (2+3)</button>
+  <h2>PickAI 테스트 페이지</h2>
+  <p>테스트용: 버튼 누르면 메시지 전송</p>
+  <button id="send">OCR 테스트 보내기 (2+3)</button>
   <div id="ocrResult"></div>
   <div id="answer"></div>
 
   <script>
-    const fileEl = document.getElementById('file');
-    const ocrBtn = document.getElementById('ocrBtn');
-    const testBtn = document.getElementById('testBtn');
-    const ocrResult = document.getElementById('ocrResult');
-    const answer = document.getElementById('answer');
-
-    ocrBtn.addEventListener('click', async () => {
-      const f = fileEl.files[0];
-      if (!f) return alert("이미지를 선택하세요");
-      ocrResult.innerText = "OCR 중...";
-      const worker = Tesseract.createWorker({
-        logger: m => console.log('[TESSERACT]', m)
-      });
-      await worker.load();
-      await worker.loadLanguage('eng');
-      await worker.initialize('eng');
-      const { data: { text } } = await worker.recognize(f);
-      await worker.terminate();
-
-      const cleaned = text.replace(/\n+/g, ' ').trim();
-      ocrResult.innerText = "인식결과: " + cleaned;
-
-      // post into page -> content.js catches and forwards
-      window.postMessage({ source: "PICK_AI", type: "OCR_RESULT", text: cleaned }, "*");
-    });
-
-    testBtn.addEventListener('click', () => {
+    document.getElementById("send").onclick = () => {
       const cleaned = "2+3";
-      ocrResult.innerText = "인식결과: " + cleaned;
+      document.getElementById("ocrResult").innerText = "인식결과: " + cleaned;
       window.postMessage({ source: "PICK_AI", type: "OCR_RESULT", text: cleaned }, "*");
-    });
+      console.log("[PICK AI] OCR_RESULT sent");
+    };
 
-    // receive final answer from extension (content.js -> background -> content.js -> page)
+    // ChatGPT 결과 받기
     window.addEventListener("message", (e) => {
       if (e.data && e.data.type === "CHATGPT_ANSWER") {
-        answer.innerText = "정답: " + e.data.answer;
+        document.getElementById("answer").innerText = "정답: " + e.data.answer;
+        console.log("[PICK AI] got answer:", e.data.answer);
       }
     });
   </script>
