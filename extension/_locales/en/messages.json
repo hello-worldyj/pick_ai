@@ -1,8 +1,0 @@
-{
-  "extName": { "message": "Pick AI" },
-  "extDesc": { "message": "Select text and get AI answers" },
-  "answerOnly": { "message": "Answer only" },
-  "explain": { "message": "Explain" },
-  "settingsTitle": { "message": "Pick AI Settings" },
-  "save": { "message": "Save" }
-}
