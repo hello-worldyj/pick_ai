@@ -1,0 +1,29 @@
+#pickai-box {
+  position: fixed;
+  z-index: 999999;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px;
+  width: 220px;
+  font-family: system-ui, -apple-system;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+#pickai-box button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 6px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #111;
+  color: white;
+  font-size: 14px;
+}
+
+#pickai-result {
+  margin-top: 8px;
+  font-weight: bold;
+  font-size: 14px;
+}

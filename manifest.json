@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Math Solver Overlay",
+  "version": "1.0",
+  "description": "PickAI OCR -> ChatGPT 자동 풀이 파이프라인",
+  "permissions": [
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "style.css"
+      ]
+    }
+  ],
+  "commands": {
+    "solve-math": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+X"
+      },
+      "description": "수학 문제 풀기 (Cmd/Ctrl + Shift + X)"
+    }
+  }
+}
